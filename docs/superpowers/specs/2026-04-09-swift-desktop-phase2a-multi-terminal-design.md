@@ -5,11 +5,12 @@
 Phase 1 delivered a native macOS Swift app with a single terminal in a WKWebView. Phase 2a extends this with:
 
 - Multiple concurrent terminal sessions, one visible at a time (CSS show/hide)
-- SQLite database (GRDB) for persisting projects and workspaces, compatible with the existing `packages/local-db` schema
+- SQLite database (GRDB) reading/writing the existing `packages/local-db` schema exactly
+- Git worktree creation for isolated workspaces (`git worktree add`)
 - Native SwiftUI sidebar via NSSplitView for project/workspace navigation
 - Full lifecycle: add project, create/delete workspace, switch between terminals
 
-This is Phase 2a of the roadmap. Phase 2b adds git status, PR badges, drag-and-drop, sections, and keyboard shortcuts.
+This is Phase 2a of the roadmap. Phase 2b adds git status polling, PR badges, drag-and-drop, sections, and keyboard shortcuts.
 
 ## Architecture
 
@@ -40,7 +41,7 @@ NSSplitView replaces the current bare WKWebView. Left pane holds a SwiftUI view 
 
 ```
 MainWindowController
-├── NSSplitView (NSSplitViewController)
+├── NSSplitViewController
 │   ├── SidebarSplitItem (NSHostingView wrapping SwiftUI)
 │   │   └── SidebarView
 │   │       ├── SidebarToolbar (+ project, + workspace buttons)
@@ -50,8 +51,8 @@ MainWindowController
 │   └── TerminalSplitItem (WKWebView — unchanged from Phase 1)
 ├── PTYSessionManager (existing)
 ├── SupersetSchemeHandler (existing)
-├── ControlMessageHandler (existing, extended)
-└── DatabaseManager (new — GRDB)
+├── ControlMessageHandler (existing — ready handler changes)
+└── DatabaseManager (new — GRDB, read/write only, no migrations)
 ```
 
 ### Data Flow
@@ -65,6 +66,7 @@ SidebarView
   → user action (select/create/delete)
   → SidebarViewModel
   → DatabaseManager (persist)
+  → GitWorktreeManager (git worktree add/remove)
   → PTYSessionManager (create/destroy PTY)
   → MainWindowController.switchTerminal(sessionId)
   → evaluateJavaScript("__superset.showTerminal(id)")
@@ -77,46 +79,79 @@ SidebarView
 
 `~/.superset/local.db` — same file as `packages/local-db` uses. WAL mode for concurrent reads.
 
-### Schema
+### Schema Compatibility
 
-Compatible with the existing Drizzle schema in `packages/local-db/src/schema/`. Phase 2a uses a subset of the tables:
+**Drizzle is the schema authority.** The Swift app does NOT run migrations. It reads/writes an already-migrated database created by the Electron app or host-service (which runs Drizzle migrations).
+
+On open, the Swift app checks that the expected tables exist. If the database file is missing or the schema is too old, it shows a blocking alert: *"Database not found — please run Superset desktop at least once to initialize the database"* and exits gracefully. No in-memory fallback — silent data loss is not acceptable.
+
+### Schema (exact match to packages/local-db)
+
+All timestamps are `INTEGER` (Unix epoch milliseconds via `Date.now()`).
 
 **projects**
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | TEXT PRIMARY KEY | UUID v4 |
-| name | TEXT NOT NULL | Display name |
+| id | TEXT PK | UUID v4 |
 | main_repo_path | TEXT NOT NULL | Absolute path to git repo |
-| color | TEXT NOT NULL DEFAULT '#6366f1' | Sidebar accent color |
-| tab_order | INTEGER NOT NULL DEFAULT 0 | Sort position |
-| created_at | TEXT NOT NULL | ISO 8601 timestamp |
-| last_opened_at | TEXT | ISO 8601 timestamp |
+| name | TEXT NOT NULL | Display name |
+| color | TEXT NOT NULL | Sidebar accent color |
+| tab_order | INTEGER | Sort position (nullable) |
+| last_opened_at | INTEGER NOT NULL | Unix ms |
+| created_at | INTEGER NOT NULL | Unix ms |
+| default_branch | TEXT | |
+| github_owner | TEXT | |
+| (+ other columns) | | Mapped but unused in Phase 2a |
+
+**worktrees**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | TEXT PK | UUID v4 |
+| project_id | TEXT NOT NULL FK→projects | CASCADE delete |
+| path | TEXT NOT NULL | Absolute worktree path |
+| branch | TEXT NOT NULL | Branch checked out |
+| base_branch | TEXT | Branch created from |
+| created_at | INTEGER NOT NULL | Unix ms |
+| created_by_superset | INTEGER NOT NULL DEFAULT 1 | Boolean |
+| (git_status, github_status) | | JSON columns, mapped but unused in 2a |
 
 **workspaces**
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | TEXT PRIMARY KEY | UUID v4 |
-| project_id | TEXT NOT NULL REFERENCES projects(id) | Parent project |
-| worktree_id | TEXT REFERENCES worktrees(id) | NULL for branch type |
-| type | TEXT NOT NULL DEFAULT 'branch' | 'branch' or 'worktree' |
+| id | TEXT PK | UUID v4 |
+| project_id | TEXT NOT NULL FK→projects | CASCADE delete |
+| worktree_id | TEXT FK→worktrees | CASCADE delete, NULL for branch type |
+| type | TEXT NOT NULL | 'branch' or 'worktree' |
 | branch | TEXT NOT NULL | Git branch name |
 | name | TEXT NOT NULL | Display name |
-| tab_order | INTEGER NOT NULL DEFAULT 0 | Sort within project |
-| created_at | TEXT NOT NULL | ISO 8601 |
-| last_opened_at | TEXT | ISO 8601 |
-| is_active | INTEGER NOT NULL DEFAULT 0 | Currently selected |
+| tab_order | INTEGER NOT NULL | Sort within project |
+| created_at | INTEGER NOT NULL | Unix ms |
+| updated_at | INTEGER NOT NULL | Unix ms |
+| last_opened_at | INTEGER NOT NULL | Unix ms |
+| is_unread | INTEGER DEFAULT 0 | Boolean |
+| is_unnamed | INTEGER DEFAULT 0 | Boolean |
+| deleting_at | INTEGER | Soft delete timestamp |
+| port_base | INTEGER | |
+| section_id | TEXT FK→workspace_sections | SET NULL |
 
-**worktrees** (Phase 2a: created but not fully used until Phase 2b adds git worktree creation)
+**Constraint:** Partial unique index `workspaces_unique_branch_per_project` on `(project_id) WHERE type = 'branch'` — only one branch workspace per project.
+
+**settings** (singleton, id=1)
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | TEXT PRIMARY KEY | UUID v4 |
-| project_id | TEXT NOT NULL REFERENCES projects(id) | Parent project |
-| path | TEXT NOT NULL | Absolute path to worktree |
-| branch | TEXT NOT NULL | Branch checked out |
-| created_at | TEXT NOT NULL | ISO 8601 |
+| id | INTEGER PK DEFAULT 1 | |
+| last_active_workspace_id | TEXT | **Source of truth for active workspace** |
+| terminal_font_family | TEXT | |
+| terminal_font_size | INTEGER | |
+| (+ many other columns) | | Mapped as needed |
+
+### Active Workspace
+
+Active workspace is stored in `settings.last_active_workspace_id` — the same source of truth as the Electron app. The Swift app reads and writes this field. There is no `is_active` column on workspaces.
 
 ### GRDB Models
 
@@ -126,10 +161,14 @@ struct Project: Codable, FetchableRecord, PersistableRecord, Identifiable {
     var name: String
     var mainRepoPath: String
     var color: String
-    var tabOrder: Int
-    var createdAt: String
-    var lastOpenedAt: String?
+    var tabOrder: Int?
+    var lastOpenedAt: Int       // Unix ms
+    var createdAt: Int          // Unix ms
+    var defaultBranch: String?
+    var githubOwner: String?
+    // Other columns auto-ignored by GRDB if not mapped
 
+    static let databaseTableName = "projects"
     static let workspaces = hasMany(Workspace.self)
 }
 
@@ -137,44 +176,125 @@ struct Workspace: Codable, FetchableRecord, PersistableRecord, Identifiable {
     var id: String
     var projectId: String
     var worktreeId: String?
-    var type: String       // "branch" or "worktree"
+    var type: String            // "branch" or "worktree"
     var branch: String
     var name: String
     var tabOrder: Int
-    var createdAt: String
-    var lastOpenedAt: String?
-    var isActive: Bool
+    var createdAt: Int          // Unix ms
+    var updatedAt: Int          // Unix ms
+    var lastOpenedAt: Int       // Unix ms
+    var isUnread: Bool?
+    var isUnnamed: Bool?
+    var deletingAt: Int?
+    var sectionId: String?
 
+    static let databaseTableName = "workspaces"
     static let project = belongsTo(Project.self)
+}
+
+struct Worktree: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    var id: String
+    var projectId: String
+    var path: String
+    var branch: String
+    var baseBranch: String?
+    var createdAt: Int          // Unix ms
+    var createdBySuperset: Bool
+
+    static let databaseTableName = "worktrees"
+}
+
+struct Settings: Codable, FetchableRecord, PersistableRecord {
+    var id: Int
+    var lastActiveWorkspaceId: String?
+    var terminalFontFamily: String?
+    var terminalFontSize: Int?
+
+    static let databaseTableName = "settings"
 }
 ```
 
 ### DatabaseManager
 
-Singleton. Opens/creates `~/.superset/local.db`, runs migrations, provides read/write methods.
+Singleton. Opens `~/.superset/local.db` in read/write mode, no migrations.
 
 ```swift
 final class DatabaseManager {
-    static let shared = DatabaseManager()
-    private let dbQueue: DatabaseQueue
+    static let shared: DatabaseManager  // failable init — shows alert on failure
 
     // Read
     func allProjectsWithWorkspaces() -> [ProjectWithWorkspaces]
-    func activeWorkspace() -> Workspace?
+    func activeWorkspaceId() -> String?
+    func workspace(id: String) -> Workspace?
 
     // Write
-    func insertProject(name: String, path: String) -> Project
-    func insertWorkspace(projectId: String, name: String, branch: String) -> Workspace
-    func setActiveWorkspace(id: String)
+    func insertProject(_ project: Project)
+    func insertWorktree(_ worktree: Worktree)
+    func insertWorkspace(_ workspace: Workspace)
+    func setActiveWorkspaceId(_ id: String)
+    func updateWorkspaceLastOpened(id: String)
     func deleteWorkspace(id: String)
-    func deleteProject(id: String)
+    func deleteWorktree(id: String)
+    func deleteProject(id: String)  // CASCADE handles children
 
     // Reactive
     func observeProjectsWithWorkspaces() -> ValueObservation<[ProjectWithWorkspaces]>
+    func observeActiveWorkspaceId() -> ValueObservation<String?>
 }
 ```
 
-`ValueObservation` is GRDB's reactive primitive — it emits new values whenever the observed tables change. The sidebar subscribes to this for live updates.
+## Git Worktree Management
+
+Phase 2a creates real git worktrees for new workspaces. This is required because:
+- The existing schema has a partial unique index allowing only one `type='branch'` workspace per project
+- Multiple workspaces per project must be `type='worktree'` with actual worktree directories
+
+### GitWorktreeManager
+
+```swift
+enum GitWorktreeManager {
+    /// Creates a git worktree at the specified path and branch.
+    /// Runs: git worktree add <path> -b <branch> [baseBranch]
+    static func createWorktree(
+        repoPath: String,
+        worktreePath: String,
+        branch: String,
+        baseBranch: String?
+    ) throws
+
+    /// Removes a git worktree.
+    /// Runs: git worktree remove <path> --force
+    static func removeWorktree(repoPath: String, worktreePath: String) throws
+
+    /// Lists existing worktrees for a repo.
+    /// Runs: git worktree list --porcelain
+    static func listWorktrees(repoPath: String) throws -> [WorktreeInfo]
+}
+```
+
+Uses `Process` (Foundation) to run git commands. Worktree directory convention: `~/.superset/worktrees/<project-name>/<branch-name>/`.
+
+### Create Workspace Flow (worktree type)
+
+1. User clicks "+" on a project in sidebar
+2. Prompt for branch name (text field)
+3. `GitWorktreeManager.createWorktree(repoPath: project.mainRepoPath, worktreePath: computed, branch: name, baseBranch: project.defaultBranch)`
+4. Insert `Worktree` row in SQLite
+5. Insert `Workspace` row (type: "worktree", worktreeId: worktree.id)
+6. Create PTY session with `cwd: worktree.path`
+7. `initTerminal` + `showTerminal` in JS
+
+### Delete Workspace Flow (worktree type)
+
+1. Choose replacement active workspace (nearest sibling or first in any project)
+2. Switch terminal in JS (`showTerminal` replacement)
+3. Destroy PTY session
+4. Destroy JS terminal (`destroyTerminal`)
+5. Delete workspace row from SQLite
+6. `GitWorktreeManager.removeWorktree`
+7. Delete worktree row from SQLite
+
+Branch-type workspaces cannot be deleted (they represent the main repo).
 
 ## SwiftUI Sidebar
 
@@ -188,12 +308,13 @@ SidebarView
 │           └── DisclosureGroup
 │               ├── ProjectHeaderView (name, color dot, workspace count)
 │               └── ForEach(workspaces)
-│                   └── WorkspaceRowView (name, active indicator)
+│                   └── WorkspaceRowView (name, type icon, active indicator)
 ├── Spacer
 └── SidebarFooterView
-    ├── Button: "Add Project" (+ icon)
-    └── Button: "New Workspace" (+ icon, context: current project)
+    └── Button: "Add Project" (+ icon)
 ```
+
+"New workspace" is per-project — a "+" button in the `ProjectHeaderView`.
 
 ### SidebarViewModel
 
@@ -205,27 +326,15 @@ final class SidebarViewModel {
 
     private let db = DatabaseManager.shared
     private let sessionManager = PTYSessionManager.shared
-    private var observation: AnyDatabaseCancellable?
+    weak var windowController: MainWindowController?
 
-    // Called by MainWindowController on init
-    func startObserving()
+    func startObserving()          // Subscribe to ValueObservation
 
     // User actions
-    func addProject()          // Opens NSOpenPanel, inserts project + default workspace
-    func createWorkspace(projectId: String)  // Inserts workspace, creates PTY
-    func selectWorkspace(id: String)         // Sets active, notifies MainWindowController
-    func deleteWorkspace(id: String)         // Removes from DB, destroys PTY
-    func deleteProject(id: String)           // Removes project + all workspaces + PTYs
-}
-```
-
-### ProjectWithWorkspaces
-
-```swift
-struct ProjectWithWorkspaces: Identifiable {
-    let project: Project
-    let workspaces: [Workspace]
-    var id: String { project.id }
+    func addProject()              // NSOpenPanel → insert project + branch workspace + PTY
+    func createWorkspace(projectId: String, branchName: String)  // git worktree add → insert → PTY
+    func selectWorkspace(id: String)  // Set active, lazy-create PTY if needed, switch terminal
+    func deleteWorkspace(id: String)  // Ordered: switch → destroy PTY → destroy JS → delete DB → remove worktree
 }
 ```
 
@@ -233,211 +342,182 @@ struct ProjectWithWorkspaces: Identifiable {
 
 Displays:
 - Workspace name (bold if active)
-- Type indicator icon (folder for branch, branch icon for worktree)
+- Type indicator: folder icon for branch, git-branch icon for worktree
 - Blue highlight background when active
-- Swipe to delete (trailing swipe action)
+- Context menu: delete (worktree type only)
 - Click to select
 
 ### Add Project Flow
 
-1. User clicks "+" button in sidebar footer
-2. `NSOpenPanel` opens with directory selection (canChooseDirectories: true)
-3. On selection: extract directory name as project name
-4. Insert `Project` into SQLite with `mainRepoPath = selected path`
-5. Auto-create one workspace (type: "branch", branch: "main", name: directory name)
-6. Auto-create PTY session for the workspace
-7. Switch to the new workspace
-
-### Delete Workspace Flow
-
-1. User swipes or right-clicks → delete on a workspace row
-2. Confirmation if it's the last workspace in a project (deletes project too)
-3. Destroy PTY session (SIGHUP child, clean up)
-4. JS: `__superset.destroyTerminal(sessionId)` — removes div from DOM
-5. Remove workspace from SQLite
-6. If active workspace was deleted: switch to the nearest sibling or first workspace
+1. User clicks "Add Project" in sidebar footer
+2. `NSOpenPanel` opens (canChooseDirectories: true)
+3. Validate: selected path contains `.git/` directory
+4. Insert `Project` (name = directory name, mainRepoPath = selected path)
+5. Insert default `Workspace` (type: "branch", branch: detected default branch or "main")
+6. Create PTY session (cwd: project.mainRepoPath)
+7. Set as active workspace
+8. `initTerminal` + `showTerminal`
 
 ## Multi-Terminal in WKWebView
 
 ### JS Changes
 
-The current `terminal-bridge.ts` creates one terminal in `#terminal-container`. Phase 2a changes:
-
 **Container structure:**
 ```html
 <div id="terminal-container" style="position:relative; width:100%; height:100%;">
-  <!-- Each terminal gets its own absolutely-positioned div -->
-  <div id="term-{sessionId1}" style="position:absolute;inset:0;visibility:visible;"></div>
-  <div id="term-{sessionId2}" style="position:absolute;inset:0;visibility:hidden;"></div>
-  <div id="term-{sessionId3}" style="position:absolute;inset:0;visibility:hidden;"></div>
+  <div id="term-{id1}" style="position:absolute;inset:0;visibility:visible;"></div>
+  <div id="term-{id2}" style="position:absolute;inset:0;visibility:hidden;"></div>
 </div>
 ```
 
-**New JS API (exposed on `window.__superset`):**
+**Updated JS API (`window.__superset`):**
 
 | Method | Purpose |
 |--------|---------|
-| `initTerminal(sessionId)` | Create div, init xterm, connect stream. Changed: no container param — creates its own div inside `#terminal-container` |
+| `initTerminal(sessionId)` | Create div inside `#terminal-container`, init xterm, connect stream. Does NOT show. |
 | `destroyTerminal(sessionId)` | Dispose xterm, remove div from DOM |
-| `showTerminal(sessionId)` | Hide all divs, show target div, call fitAddon.fit(), requestResize |
-| `getActiveSessionId()` | Returns currently visible session ID (or null) |
+| `showTerminal(sessionId)` | Hide all divs, show target, fitAddon.fit(), requestResize, focus |
+| `getActiveSessionId()` | Returns currently visible session ID or null |
 
-**`initTerminal` changes from Phase 1:**
-- Creates a new `<div>` inside `#terminal-container` with `id="term-{sessionId}"` and `position:absolute;inset:0;visibility:hidden`
-- Opens xterm.js Terminal in that div
-- Does NOT auto-show — caller must follow up with `showTerminal`
+**Why `visibility:hidden` not `display:none`:** `display:none` removes from layout — xterm.js canvas becomes 0×0. `visibility:hidden` keeps layout, so `fitAddon.fit()` works instantly on show.
 
-**`showTerminal` implementation:**
-```typescript
-function showTerminal(sessionId: string): void {
-  // Hide all terminal divs
-  for (const [id, entry] of terminals) {
-    entry.container.style.visibility = "hidden";
-  }
-  // Show target
-  const entry = terminals.get(sessionId);
-  if (entry) {
-    entry.container.style.visibility = "visible";
-    entry.fit.fit();
-    bridge.requestResize(sessionId, entry.term.cols, entry.term.rows);
-    entry.term.focus();
-  }
-}
-```
+**Scale target:** Up to 20 concurrent terminals in Phase 2a. ~40-60MB memory for 20 xterm instances — acceptable.
 
-### Why `visibility:hidden` not `display:none`
+## Startup and Recovery
 
-`display:none` removes the element from layout — xterm.js loses its dimensions and the canvas size becomes 0. `visibility:hidden` keeps the element in layout (takes space, maintains dimensions) but doesn't paint it. When we switch back and call `fitAddon.fit()`, it has correct container dimensions immediately.
-
-## Swift Side Changes
-
-### MainWindowController
-
-Replaces the current single-WKWebView layout with NSSplitViewController:
-
-```swift
-final class MainWindowController: NSObject, NSSplitViewDelegate, WKNavigationDelegate {
-    let window: NSWindow
-    private var splitViewController: NSSplitViewController!
-    private(set) var webView: WKWebView!
-    private var sidebarViewModel: SidebarViewModel!
-
-    // Terminal switching
-    func switchTerminal(sessionId: String) {
-        webView.evaluateJavaScript("__superset.showTerminal('\(sessionId.escaped)')")
-    }
-
-    // Called by SidebarViewModel
-    func createAndShowTerminal(sessionId: String, cwd: String) {
-        // 1. Create PTY (existing)
-        // 2. evaluateJavaScript("__superset.initTerminal('id')")
-        // 3. evaluateJavaScript("__superset.showTerminal('id')")
-    }
-
-    func destroyTerminal(sessionId: String) {
-        sessionManager.destroySession(sessionId)
-        webView.evaluateJavaScript("__superset.destroyTerminal('\(sessionId.escaped)')")
-    }
-}
-```
-
-### handleJSReady changes
-
-On `ready` signal from JS, restore all workspaces from SQLite (not just active sessions from PTYSessionManager):
+### App Launch (fresh start, no PTY sessions)
 
 ```
-JS ready
-  → Read all workspaces from SQLite
-  → For each workspace: if PTY session exists, initTerminal + reconnect stream
-  → For active workspace: showTerminal
+1. DatabaseManager opens ~/.superset/local.db (fail with alert if missing)
+2. Read settings.last_active_workspace_id → activeWorkspaceId
+3. Read all projects + workspaces
+4. SidebarView renders from DB data
+5. WebView loads → JS sends "ready"
+6. handleJSReady:
+   a. If activeWorkspaceId exists and workspace found:
+      - Create PTY for active workspace only (lazy — others wait)
+      - initTerminal(activeId) + showTerminal(activeId)
+   b. If no active workspace: show empty state
 ```
 
-This handles app restart: PTY sessions are gone, but workspace list persists. New PTY sessions are created for each workspace, and the active one is shown.
+**Lazy PTY creation:** Only the active workspace gets a PTY at launch. When the user clicks another workspace, `selectWorkspace` creates the PTY on demand. This avoids spawning N login shells at startup.
 
-### NSSplitViewController Setup
+### Workspace Selection (lazy PTY)
 
-```swift
-let splitVC = NSSplitViewController()
-
-// Sidebar (SwiftUI)
-let sidebarItem = NSSplitViewItem(sidebarWithViewController:
-    NSHostingController(rootView: SidebarView(viewModel: sidebarViewModel)))
-sidebarItem.minimumThickness = 180
-sidebarItem.maximumThickness = 350
-sidebarItem.canCollapse = true
-
-// Terminal (WKWebView)
-let terminalVC = NSViewController()
-terminalVC.view = webView
-let terminalItem = NSSplitViewItem(contentListWithViewController: terminalVC)
-
-splitVC.addSplitViewItem(sidebarItem)
-splitVC.addSplitViewItem(terminalItem)
-
-window.contentViewController = splitVC
+```
+selectWorkspace(id):
+  1. Update settings.last_active_workspace_id in DB
+  2. If PTYSessionManager has session for id:
+     → evaluateJavaScript("__superset.showTerminal(id)")
+  3. Else (first visit):
+     → Create PTY session (cwd from workspace/worktree)
+     → evaluateJavaScript("__superset.initTerminal(id)")
+     → evaluateJavaScript("__superset.showTerminal(id)")
 ```
 
-### ControlMessageHandler changes
+### WebView Crash Recovery (PTY sessions alive)
 
-No changes needed — `createSession`, `resize`, `destroySession`, `ready` all still work. The `ready` handler in MainWindowController changes to restore from SQLite.
+```
+webViewWebContentProcessDidTerminate:
+  1. invalidateAllStreams() (existing)
+  2. webView.reload()
 
-### SupersetSchemeHandler changes
+handleJSReady (after reload):
+  1. For each session in PTYSessionManager.activeSessionIds():
+     → initTerminal(sessionId)  // reconnects to existing PTY, replay buffer delivers history
+  2. showTerminal(activeWorkspaceId)
+```
 
-No changes needed — it already supports multiple concurrent sessions (keyed by sessionId in `activeStreams`).
+This is distinct from app relaunch — PTY sessions survive WebView crash because they live in the Swift process.
+
+## Deletion Ordering
+
+Deleting a workspace follows a strict sequence to prevent state drift:
+
+```
+deleteWorkspace(id):
+  1. Determine replacement: nearest sibling in same project, or first workspace in any project
+  2. If id == activeWorkspaceId:
+     a. selectWorkspace(replacementId)  // updates DB + switches terminal
+  3. Destroy PTY: sessionManager.destroySession(id)
+  4. Destroy JS terminal: evaluateJavaScript("__superset.destroyTerminal(id)")
+  5. Delete workspace row from DB
+  6. If type == "worktree":
+     a. GitWorktreeManager.removeWorktree(...)
+     b. Delete worktree row from DB
+```
+
+If step 3-6 fail after step 2, the user still sees a working terminal (the replacement). The stale DB row will be cleaned up on next delete attempt or can be ignored.
 
 ## Error Handling
 
 | Scenario | Behavior |
 |----------|----------|
-| Project path doesn't exist | Show alert, don't add project |
-| PTY creation fails for workspace | Show error in sidebar (red icon), workspace exists but has no terminal |
-| Delete last workspace in project | Confirmation dialog: "Delete project too?" |
-| Delete active workspace | Switch to nearest sibling, or first workspace in any project |
-| No workspaces at all | Show empty state in sidebar ("Add a project to get started") |
-| SQLite migration fails | Log error, fall back to in-memory database |
-| WebView crash | Existing recovery: reload, re-init all active terminals from PTYSessionManager |
+| DB file missing | Blocking alert, exit gracefully |
+| DB schema too old | Blocking alert: "Please update Superset desktop" |
+| Project path doesn't exist | Alert, don't add project |
+| Project path not a git repo | Alert, don't add project |
+| git worktree add fails | Alert with git error message, don't create workspace |
+| PTY creation fails | Show error icon on workspace row, workspace exists but no terminal |
+| Delete last workspace in project | Confirmation: "This will delete the project. Continue?" |
+| Delete active workspace | Switch to replacement first (step 1-2 above) |
+| No projects at all | Empty state: "Add a project to get started" |
 
 ## Constraints
 
 - **macOS 15+** (same as Phase 1)
-- **GRDB via SPM** — only external dependency
-- **No git operations** — Phase 2b adds git status/branches
+- **GRDB via SPM** — only new external dependency
+- **Drizzle is schema authority** — Swift does not run migrations
+- **Lazy PTY creation** — only active workspace gets PTY at launch
+- **Up to 20 terminals** — beyond that, consider hibernation (Phase 2b+)
 - **No sections/groups** — Phase 2b
 - **No drag-and-drop** — Phase 2b
 - **No keyboard shortcuts (⌘1-9)** — Phase 2b
-- **No PR badges** — Phase 2b
-- **Branch workspace only** — worktree creation is Phase 2b (table exists but unused)
+- **No git status polling / PR badges** — Phase 2b
 
 ## Build Integration
 
-- Add GRDB dependency to Xcode project via SPM (or via `project.yml` for xcodegen)
-- No changes to JS build pipeline (just code changes in existing files)
+- Add GRDB dependency to Xcode project via SPM (or `project.yml` for xcodegen)
+- No changes to JS build pipeline (code changes only in existing `terminal-bridge.ts`)
 
 ## Verification
 
 ### Happy Path
 
 1. **Launch:** App opens with NSSplitView — sidebar left, terminal right
-2. **Empty state:** Sidebar shows "Add a project to get started"
-3. **Add project:** Click "+", select directory, project appears in sidebar with one workspace
-4. **Terminal works:** New workspace has a working terminal in the selected directory
-5. **Create workspace:** Click "+" on project, new workspace appears, terminal created
+2. **Empty state:** Sidebar shows "Add a project to get started" (if DB has no projects)
+3. **Add project:** Click "+", select git repo directory, project appears with branch workspace
+4. **Terminal works:** Active workspace terminal opens in the project directory
+5. **Create workspace:** Click "+" on project header, enter branch name, worktree created, terminal opens
 6. **Switch:** Click different workspace — terminal switches instantly, scrollback preserved
-7. **Delete workspace:** Swipe delete — terminal destroyed, switches to another
-8. **Persistence:** Quit and relaunch — projects/workspaces restored, terminals recreated
+7. **Delete workspace:** Context menu delete on worktree workspace — terminal destroyed, worktree removed
+8. **Persistence:** Quit and relaunch — projects/workspaces restored from DB, active terminal recreated
 
 ### Edge Cases
 
-9. **Multiple projects:** Add 2+ projects, workspaces interleave correctly
-10. **Sidebar resize:** Drag divider — terminal reflows via FitAddon
+9. **Multiple projects:** Add 2+ projects, each with multiple workspaces
+10. **Sidebar resize:** Drag divider — terminal reflows
 11. **Sidebar collapse:** Collapse sidebar — terminal fills window
-12. **Delete active:** Delete the currently active workspace — switches to sibling
-13. **Delete last in project:** Confirmation dialog, removes project from sidebar
+12. **Delete active:** Delete currently active workspace — switches to sibling
+13. **Delete last worktree in project:** Only branch workspace remains
+14. **Branch workspace undeletable:** No delete option in context menu for branch type
+15. **Lazy PTY:** Switch to workspace that was never opened — PTY created on demand
+
+### Compatibility
+
+16. **Existing DB:** Launch with a real `~/.superset/local.db` from Electron — projects/workspaces appear correctly
+17. **Active workspace shared:** Switch workspace in Swift, relaunch Electron — same workspace is active
+18. **Worktree on disk:** Created worktrees exist at `~/.superset/worktrees/<project>/<branch>/`
+
+### Recovery
+
+19. **WebView crash:** Force-kill WebContent process — terminals reconnect with history
+20. **App relaunch:** Quit and reopen — active workspace PTY recreated, others lazy
 
 ## Reference Files
 
 - `apps/desktop-swift/Sources/App/MainWindowController.swift` — current window setup to modify
 - `apps/desktop-swift/Sources/App/SupersetApp.swift` — app delegate to modify
 - `apps/desktop-swift/web-src/terminal-bridge.ts` — JS terminal management to extend
-- `packages/local-db/src/schema/schema.ts` — reference SQLite schema
+- `packages/local-db/src/schema/schema.ts` — authoritative SQLite schema
 - `apps/desktop/src/renderer/screens/main/components/WorkspaceSidebar/` — Electron sidebar reference
