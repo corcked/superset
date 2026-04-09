@@ -5,7 +5,7 @@ final class DatabaseManager: @unchecked Sendable {
 
     // MARK: - Shared Instance
 
-    static var shared: DatabaseManager!
+    nonisolated(unsafe) static var shared: DatabaseManager!
 
     // MARK: - Properties
 
@@ -158,7 +158,7 @@ final class DatabaseManager: @unchecked Sendable {
 
     // MARK: - Reactive Observation
 
-    func observeProjectsWithWorkspaces(
+    @MainActor func observeProjectsWithWorkspaces(
         onChange: @escaping ([ProjectWithWorkspaces]) -> Void
     ) -> AnyDatabaseCancellable {
         let observation = ValueObservation.tracking { db -> [ProjectWithWorkspaces] in
@@ -179,7 +179,7 @@ final class DatabaseManager: @unchecked Sendable {
         return observation.start(in: dbQueue, onError: { _ in }, onChange: onChange)
     }
 
-    func observeActiveWorkspaceId(
+    @MainActor func observeActiveWorkspaceId(
         onChange: @escaping (String?) -> Void
     ) -> AnyDatabaseCancellable {
         let observation = ValueObservation.tracking { db -> String? in

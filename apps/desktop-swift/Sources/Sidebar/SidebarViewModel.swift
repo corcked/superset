@@ -3,6 +3,7 @@ import Foundation
 import GRDB
 import os
 
+@MainActor
 @Observable
 final class SidebarViewModel {
     var projects: [ProjectWithWorkspaces] = []

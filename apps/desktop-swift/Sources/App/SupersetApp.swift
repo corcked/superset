@@ -14,14 +14,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: MainWindowController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        windowController = MainWindowController()
+        // Open database — fail fast if missing
+        let dbPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".superset/local.db").path
 
-        // Phase 1: create the PTY session eagerly so output accumulates in the replay buffer.
-        // The JS initTerminal call happens in didFinish navigation delegate after WebView loads.
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let sessionId = UUID().uuidString
-        windowController.createPTYSession(sessionId: sessionId, cwd: home)
+        guard let db = DatabaseManager(path: dbPath) else {
+            let alert = NSAlert()
+            alert.messageText = "Database Not Found"
+            alert.informativeText = "Could not open \(dbPath). Please run Superset desktop at least once to initialize the database."
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "Quit")
+            alert.runModal()
+            NSApplication.shared.terminate(nil)
+            return
+        }
+        DatabaseManager.shared = db
 
+        windowController = MainWindowController(db: db)
         windowController.loadWebContent()
         windowController.window.makeKeyAndOrderFront(nil)
     }

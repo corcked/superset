@@ -20,6 +20,11 @@
 		8A9B8BA611159A0EDBDAD387 /* OutputBatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0063DDB758AF6294064DE5C /* OutputBatcher.swift */; };
 		93DF999DF354D892E5EE0C67 /* WebContent in Resources */ = {isa = PBXBuildFile; fileRef = 5277D5DD52B725DEC1AF8D54 /* WebContent */; };
 		94349896BD478E8DF5CAF477 /* ShellEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96E58142EB90A8B49C2506A /* ShellEnvironment.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* DatabaseManager.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F5 /* Models.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F6 /* GitWorktreeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F7 /* GitWorktreeManager.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F8 /* SidebarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F9 /* SidebarViewModel.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1FA /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1FB /* SidebarView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +51,11 @@
 		C96E58142EB90A8B49C2506A /* ShellEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellEnvironment.swift; sourceTree = "<group>"; };
 		E0063DDB758AF6294064DE5C /* OutputBatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputBatcher.swift; sourceTree = "<group>"; };
 		EFA9AB08E275D403033F5B3F /* SupersetShell.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SupersetShell.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6A7B8C9D0E1F3 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F5 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F7 /* GitWorktreeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitWorktreeManager.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F9 /* SidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewModel.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1FB /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -83,9 +93,38 @@
 			children = (
 				6440F03073F7A16B558815ED /* App */,
 				BC7901E6F58B4B14DD788AD1 /* Bridge */,
+				A1B2C3D4E5F6A7B8C9D0E200 /* Database */,
+				A1B2C3D4E5F6A7B8C9D0E201 /* Git */,
 				3F51D25EA32120B5CB2098BF /* PTY */,
+				A1B2C3D4E5F6A7B8C9D0E202 /* Sidebar */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6A7B8C9D0E200 /* Database */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6A7B8C9D0E1F3 /* DatabaseManager.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F5 /* Models.swift */,
+			);
+			path = Database;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6A7B8C9D0E201 /* Git */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6A7B8C9D0E1F7 /* GitWorktreeManager.swift */,
+			);
+			path = Git;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6A7B8C9D0E202 /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6A7B8C9D0E1FB /* SidebarView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F9 /* SidebarViewModel.swift */,
+			);
+			path = Sidebar;
 			sourceTree = "<group>";
 		};
 		6440F03073F7A16B558815ED /* App */ = {
@@ -261,11 +300,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				39DEF411D94B5D65CAA26FA6 /* ControlMessageHandler.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* DatabaseManager.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F6 /* GitWorktreeManager.swift in Sources */,
 				8A1E052FD66AF8853DF61A72 /* MainWindowController.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F4 /* Models.swift in Sources */,
 				8A9B8BA611159A0EDBDAD387 /* OutputBatcher.swift in Sources */,
 				59597029060BC9BDC3AE23B0 /* PTYSession.swift in Sources */,
 				4EF72C35E4EE474E7CA02FCA /* PTYSessionManager.swift in Sources */,
 				94349896BD478E8DF5CAF477 /* ShellEnvironment.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1FA /* SidebarView.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F8 /* SidebarViewModel.swift in Sources */,
 				87E7AC78F8CCDC392F08853F /* SupersetApp.swift in Sources */,
 				715451FDF04952659931D4C1 /* SupersetSchemeHandler.swift in Sources */,
 			);
