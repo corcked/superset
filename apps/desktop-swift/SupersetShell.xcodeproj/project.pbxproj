@@ -9,12 +9,14 @@
 /* Begin PBXBuildFile section */
 		39DEF411D94B5D65CAA26FA6 /* ControlMessageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BD828423B5643F0EC6D8073 /* ControlMessageHandler.swift */; };
 		4EF72C35E4EE474E7CA02FCA /* PTYSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9599F86CB0C15314D2CC28C /* PTYSessionManager.swift */; };
+		5227A83A5C0307AB21ABD98B /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 9653B1F1F122924F49EDDC10 /* GRDB */; };
 		59597029060BC9BDC3AE23B0 /* PTYSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB204BB0EB8E9E43776037F8 /* PTYSession.swift */; };
 		715451FDF04952659931D4C1 /* SupersetSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08CF51DAB724256A3B7B4DF3 /* SupersetSchemeHandler.swift */; };
 		737A9C9112301012F23F0928 /* OutputBatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12798082415E117FFA0DF95B /* OutputBatcherTests.swift */; };
 		7F2DC923C6A503AC186D7199 /* PTYSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78717C838D7276434EE866E1 /* PTYSessionTests.swift */; };
 		87E7AC78F8CCDC392F08853F /* SupersetApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23ED462F661EDEF126FC079 /* SupersetApp.swift */; };
 		8A1E052FD66AF8853DF61A72 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA0499D3388FB2E81BF24E6 /* MainWindowController.swift */; };
+		8A6F8E8A7B1832D3E1F5B5CF /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 925545D85800F735567715F5 /* GRDB */; };
 		8A9B8BA611159A0EDBDAD387 /* OutputBatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0063DDB758AF6294064DE5C /* OutputBatcher.swift */; };
 		93DF999DF354D892E5EE0C67 /* WebContent in Resources */ = {isa = PBXBuildFile; fileRef = 5277D5DD52B725DEC1AF8D54 /* WebContent */; };
 		94349896BD478E8DF5CAF477 /* ShellEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96E58142EB90A8B49C2506A /* ShellEnvironment.swift */; };
@@ -45,6 +47,25 @@
 		E0063DDB758AF6294064DE5C /* OutputBatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputBatcher.swift; sourceTree = "<group>"; };
 		EFA9AB08E275D403033F5B3F /* SupersetShell.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SupersetShell.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0DDB886BCEF2B4ACC6FAC6CB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8A6F8E8A7B1832D3E1F5B5CF /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		751583BD991DBC0EDDA6211F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5227A83A5C0307AB21ABD98B /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		3F51D25EA32120B5CB2098BF /* PTY */ = {
@@ -124,6 +145,7 @@
 				BCDB2B27DD7FE17B004FC099 /* Build Web Content */,
 				0DE0E549A0F5449D64A81061 /* Sources */,
 				34BF5EA8055259F93752DA46 /* Resources */,
+				0DDB886BCEF2B4ACC6FAC6CB /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -131,6 +153,7 @@
 			);
 			name = SupersetShell;
 			packageProductDependencies = (
+				925545D85800F735567715F5 /* GRDB */,
 			);
 			productName = SupersetShell;
 			productReference = EFA9AB08E275D403033F5B3F /* SupersetShell.app */;
@@ -141,6 +164,7 @@
 			buildConfigurationList = 5C674164F88FBB9D5B75C351 /* Build configuration list for PBXNativeTarget "SupersetShellTests" */;
 			buildPhases = (
 				02309996E89BF1D153B781D8 /* Sources */,
+				751583BD991DBC0EDDA6211F /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -149,6 +173,7 @@
 			);
 			name = SupersetShellTests;
 			packageProductDependencies = (
+				9653B1F1F122924F49EDDC10 /* GRDB */,
 			);
 			productName = SupersetShellTests;
 			productReference = 3D30DFFD86E8C13BFC519CF3 /* SupersetShellTests.xctest */;
@@ -174,6 +199,9 @@
 			);
 			mainGroup = 84ECBDFCE15DB34AD5CF5A78;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				EFDFCDC18C2AECE724373073 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CF41C90C1C01638960CCBB93 /* Products */;
 			projectDirPath = "";
@@ -476,6 +504,30 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		EFDFCDC18C2AECE724373073 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		925545D85800F735567715F5 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EFDFCDC18C2AECE724373073 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+		9653B1F1F122924F49EDDC10 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EFDFCDC18C2AECE724373073 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1D0C31FF35EB4D61CC9EA732 /* Project object */;
 }

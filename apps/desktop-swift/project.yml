@@ -1,4 +1,8 @@
 name: SupersetShell
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: "7.4.1"
 options:
   bundleIdPrefix: sh.superset
   deploymentTarget:
@@ -26,6 +30,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ""
         ENABLE_APP_SANDBOX: false
         GENERATE_INFOPLIST_FILE: true
+    dependencies:
+      - package: GRDB
     preBuildScripts:
       - name: Build Web Content
         script: |
@@ -43,6 +49,7 @@ targets:
       - Tests
     dependencies:
       - target: SupersetShell
+      - package: GRDB
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
