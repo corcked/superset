@@ -52,13 +52,23 @@ export async function connectOutputStream(
   sessionId: string,
   callbacks: StreamCallbacks,
 ): Promise<void> {
-  const response = await fetch(`superset://terminal/stream/${sessionId}`);
-
-  if (!response.ok || !response.body) {
-    callbacks.onError(`Stream connection failed: ${response.status}`);
+  try {
+    document.title = `fetch stream for ${sessionId.substring(0, 8)}`;
+  } catch {}
+  let response: Response;
+  try {
+    response = await fetch(`superset://terminal/stream/${sessionId}`);
+  } catch (e: any) {
+    callbacks.onError(`Stream fetch threw: ${e.message}`);
     return;
   }
 
+  if (!response.ok || !response.body) {
+    callbacks.onError(`Stream connection failed: status=${response.status}, hasBody=${!!response.body}`);
+    return;
+  }
+
+  try { document.title = `stream connected, reading...`; } catch {}
   const reader = response.body.getReader();
   let buf: Uint8Array<ArrayBuffer> = new Uint8Array(0);
 

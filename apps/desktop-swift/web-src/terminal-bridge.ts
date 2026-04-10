@@ -119,17 +119,6 @@ function initTerminal(sessionId: string): void {
   resizeObserver.observe(container);
 
   terminals.set(sessionId, { term, fit: fitAddon, container, resizeObserver });
-
-  // Connect PTY output stream
-  bridge.connectOutputStream(sessionId, {
-    onData: (data) => term.write(data),
-    onExit: (code, _signal) => {
-      term.writeln(`\r\n\x1b[90m[Process exited with code ${code}]\x1b[0m`);
-    },
-    onError: (message) => {
-      term.writeln(`\r\n\x1b[31m[Error: ${message}]\x1b[0m`);
-    },
-  });
 }
 
 function showTerminal(sessionId: string): void {
@@ -143,9 +132,13 @@ function showTerminal(sessionId: string): void {
   if (entry) {
     entry.container.style.visibility = "visible";
     activeSessionId = sessionId;
-    entry.fit.fit();
-    bridge.requestResize(sessionId, entry.term.cols, entry.term.rows);
-    entry.term.focus();
+    // Delay fit to ensure layout is computed after visibility change
+    requestAnimationFrame(() => {
+      entry.fit.fit();
+      entry.term.refresh(0, entry.term.rows - 1);
+      bridge.requestResize(sessionId, entry.term.cols, entry.term.rows);
+      entry.term.focus();
+    });
   }
 }
 
@@ -166,12 +159,29 @@ function getActiveSessionId(): string | null {
   return activeSessionId;
 }
 
+/** Called from Swift via evaluateJavaScript — delivers PTY output as base64 */
+function receivePTYData(sessionId: string, base64: string): void {
+  const entry = terminals.get(sessionId);
+  if (!entry) return;
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  entry.term.write(bytes);
+}
+
+/** Called from Swift via evaluateJavaScript — delivers PTY exit event */
+function receivePTYExit(sessionId: string, code: number, signal: number): void {
+  const entry = terminals.get(sessionId);
+  if (!entry) return;
+  entry.term.writeln(`\r\n\x1b[90m[Process exited with code ${code}]\x1b[0m`);
+}
+
 // Expose to Swift
 (window as any).__superset = {
   initTerminal,
   showTerminal,
   destroyTerminal,
   getActiveSessionId,
+  receivePTYData,
+  receivePTYExit,
 };
 
 // Signal readiness

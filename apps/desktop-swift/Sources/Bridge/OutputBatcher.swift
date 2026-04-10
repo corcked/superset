@@ -54,17 +54,17 @@ final class OutputBatcher: @unchecked Sendable {
         cancelTimer()
         lock.unlock()
 
-        let framed = Self.makeDataFrame(chunk)
-        onFlush(sessionId, framed)
+        // Send raw bytes — framing not needed for evaluateJavaScript delivery
+        onFlush(sessionId, chunk)
     }
 
-    /// Returns a framed replay of all buffered raw output (for reconnect after WebView crash).
+    /// Returns raw replay of all buffered output (for reconnect after WebView crash).
     func replayBuffer() -> Data? {
         lock.lock()
         let raw = replay
         lock.unlock()
         guard !raw.isEmpty else { return nil }
-        return Self.makeDataFrame(raw)
+        return raw  // raw bytes, not framed — delivered via evaluateJavaScript+base64
     }
 
     func cancel() {

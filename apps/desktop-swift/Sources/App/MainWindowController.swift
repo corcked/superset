@@ -64,7 +64,16 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
 
         // Terminal (WKWebView)
         let terminalVC = NSViewController()
-        terminalVC.view = webView
+        let containerView = NSView()
+        containerView.addSubview(webView)
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            webView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            webView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+        ])
+        terminalVC.view = containerView
         let terminalItem = NSSplitViewItem(contentListWithViewController: terminalVC)
 
         splitVC.addSplitViewItem(sidebarItem)
@@ -108,12 +117,12 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
                 cwd: cwd,
                 onBatchReady: { [weak self] id, data in
                     DispatchQueue.main.async {
-                        self?.schemeHandler.sendBatch(sessionId: id, data: data)
+                        self?.deliverPTYData(sessionId: id, data: data)
                     }
                 },
                 onExit: { [weak self] id, code, signal in
                     DispatchQueue.main.async {
-                        self?.schemeHandler.finishStream(sessionId: id, exitCode: code, signal: signal)
+                        self?.deliverPTYExit(sessionId: id, exitCode: code, signal: signal)
                     }
                 }
             )
@@ -125,6 +134,19 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
         let escaped = sessionId.jsEscaped
         webView.evaluateJavaScript("window.__superset?.initTerminal('\(escaped)')")
         webView.evaluateJavaScript("window.__superset?.showTerminal('\(escaped)')")
+    }
+
+    /// Deliver batched PTY output to JS via evaluateJavaScript (WKURLSchemeHandler streaming not supported)
+    func deliverPTYData(sessionId: String, data: Data) {
+        let base64 = data.base64EncodedString()
+        let escaped = sessionId.jsEscaped
+        webView.evaluateJavaScript("window.__superset?.receivePTYData('\(escaped)', '\(base64)')")
+    }
+
+    /// Deliver PTY exit event to JS via evaluateJavaScript
+    func deliverPTYExit(sessionId: String, exitCode: Int32, signal: Int32) {
+        let escaped = sessionId.jsEscaped
+        webView.evaluateJavaScript("window.__superset?.receivePTYExit('\(escaped)', \(exitCode), \(signal))")
     }
 
     func switchTerminal(sessionId: String) {
@@ -158,6 +180,11 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
             for sessionId in existingIds {
                 let escaped = sessionId.jsEscaped
                 webView.evaluateJavaScript("window.__superset?.initTerminal('\(escaped)')")
+                // Deliver replay buffer so reconnected terminal shows previous output
+                if let batcher = sessionManager.batcher(for: sessionId),
+                   let replay = batcher.replayBuffer() {
+                    deliverPTYData(sessionId: sessionId, data: replay)
+                }
             }
         }
 

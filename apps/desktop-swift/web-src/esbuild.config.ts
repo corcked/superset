@@ -14,7 +14,7 @@ const options = {
   entryPoints: ["web-src/terminal-bridge.ts"],
   bundle: true,
   outfile: `${outdir}/terminal.js`,
-  format: "esm" as const,
+  format: "iife" as const,
   target: "safari18.0",
   minify: !isWatch,
   sourcemap: true,

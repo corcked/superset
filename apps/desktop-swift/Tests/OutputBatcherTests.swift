@@ -14,7 +14,7 @@ private final class Counter: @unchecked Sendable {
 
 final class OutputBatcherTests: XCTestCase {
 
-    func testFlushProducesFramedData() {
+    func testFlushProducesRawData() {
         let expectation = expectation(description: "Flushed")
         let box = DataBox()
 
@@ -29,12 +29,9 @@ final class OutputBatcherTests: XCTestCase {
         wait(for: [expectation], timeout: 1.0)
 
         let flushedData = box.value!
-        // Frame: [0x01][4 bytes length][payload]
-        XCTAssertEqual(flushedData[0], 0x01) // data frame type
-        let length = UInt32(flushedData[1]) << 24 | UInt32(flushedData[2]) << 16
-                   | UInt32(flushedData[3]) << 8  | UInt32(flushedData[4])
-        XCTAssertEqual(length, 5) // "hello" is 5 bytes
-        XCTAssertEqual(String(data: flushedData[5...], encoding: .utf8), "hello")
+        // Raw bytes — no framing, delivered via evaluateJavaScript+base64
+        XCTAssertEqual(flushedData.count, 5) // "hello" is 5 bytes
+        XCTAssertEqual(String(data: flushedData, encoding: .utf8), "hello")
     }
 
     func testAutoFlushOnMaxSize() {
@@ -61,12 +58,9 @@ final class OutputBatcherTests: XCTestCase {
 
         let replay = batcher.replayBuffer()
         XCTAssertNotNil(replay)
-        // Replay contains framed data — parse it
-        // First frame: header (5 bytes) + "first" (5 bytes)
-        // The replay buffer stores RAW bytes, and replayBuffer() wraps in a frame
-        // So the result is one data frame containing "firstsecond"
-        let frameType = replay![0]
-        XCTAssertEqual(frameType, 0x01)
+        // Replay contains raw bytes — delivered via evaluateJavaScript+base64
+        // The replay buffer accumulates all raw input: "firstsecond"
+        XCTAssertEqual(String(data: replay!, encoding: .utf8), "firstsecond")
     }
 
     func testEmptyFlushDoesNothing() {
