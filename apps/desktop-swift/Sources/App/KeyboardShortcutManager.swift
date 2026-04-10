@@ -6,6 +6,8 @@ final class KeyboardShortcutManager {
     private var monitor: Any?
     weak var sidebarViewModel: SidebarViewModel?
     weak var sidebarSplitItem: NSSplitViewItem?
+    /// Forward non-shortcut key events to the terminal via JS
+    var onForwardKeyToTerminal: ((NSEvent) -> Void)?
     private let logger = Logger(subsystem: "sh.superset.shell", category: "Shortcuts")
 
     func install() {
@@ -74,6 +76,8 @@ final class KeyboardShortcutManager {
             return nil
         }
 
+        // Forward non-shortcut keys to terminal if WKWebView doesn't have native focus
+        onForwardKeyToTerminal?(event)
         return event
     }
 

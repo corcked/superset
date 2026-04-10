@@ -39,7 +39,15 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
 
         keyboardManager.sidebarViewModel = sidebarViewModel
         keyboardManager.sidebarSplitItem = sidebarSplitItem
+        keyboardManager.onForwardKeyToTerminal = { [weak self] event in
+            self?.forwardKeyEventToTerminal(event)
+        }
         keyboardManager.install()
+
+        // Diagnostic: log responder chain after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            self?.logDiagnostics()
+        }
     }
 
     private func setupSplitView() {
@@ -157,6 +165,51 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
     func destroyTerminal(sessionId: String) {
         let escaped = sessionId.jsEscaped
         webView.evaluateJavaScript("window.__superset?.destroyTerminal('\(escaped)')")
+    }
+
+    // MARK: - Key Forwarding
+
+    /// Forward keyboard events to xterm.js when WKWebView doesn't have native keyboard focus.
+    /// This works around the NSSplitView/WKWebView focus issue.
+    private func forwardKeyEventToTerminal(_ event: NSEvent) {
+        guard let chars = event.characters, !chars.isEmpty else { return }
+
+        // Encode the key event as a JSON object for JS to process
+        let jsChars = chars
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\t", with: "\\t")
+
+        webView.evaluateJavaScript("window.__superset?.forwardKey('\(jsChars)')")
+    }
+
+    // MARK: - Diagnostics
+
+    private func logDiagnostics() {
+        let fr = window.firstResponder
+        NSLog("[DIAG] firstResponder = %@", String(describing: type(of: fr)))
+        NSLog("[DIAG] webView.acceptsFirstResponder = %d", webView.acceptsFirstResponder ? 1 : 0)
+
+        // Walk WKWebView subview tree
+        var lines: [String] = []
+        func walk(_ v: NSView, depth: Int) {
+            lines.append("\(String(repeating: "  ", count: depth))\(type(of: v)) accepts=\(v.acceptsFirstResponder) \(Int(v.frame.width))x\(Int(v.frame.height))")
+            for s in v.subviews { walk(s, depth: depth + 1) }
+        }
+        walk(webView, depth: 0)
+        NSLog("[DIAG] webView hierarchy:\n%@", lines.joined(separator: "\n"))
+
+        webView.evaluateJavaScript("""
+            JSON.stringify({
+                activeEl: document.activeElement?.tagName + '.' + (document.activeElement?.className || ''),
+                helperExists: !!document.querySelector('.xterm-helper-textarea'),
+                terms: document.getElementById('terminal-container')?.children.length || 0
+            })
+        """) { result, _ in
+            NSLog("[DIAG] JS: %@", String(describing: result))
+        }
     }
 
     // MARK: - Focus Management

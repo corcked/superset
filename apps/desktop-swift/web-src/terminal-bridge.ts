@@ -174,6 +174,15 @@ function receivePTYExit(sessionId: string, code: number, signal: number): void {
   entry.term.writeln(`\r\n\x1b[90m[Process exited with code ${code}]\x1b[0m`);
 }
 
+/** Called from Swift — forwards keyboard input when WKWebView lacks native focus */
+function forwardKey(chars: string): void {
+  if (!activeSessionId) return;
+  const entry = terminals.get(activeSessionId);
+  if (!entry) return;
+  // Write directly to the PTY via bridge (same as xterm.js onData)
+  bridge.sendInput(activeSessionId, chars);
+}
+
 // Expose to Swift
 (window as any).__superset = {
   initTerminal,
@@ -182,6 +191,7 @@ function receivePTYExit(sessionId: string, code: number, signal: number): void {
   getActiveSessionId,
   receivePTYData,
   receivePTYExit,
+  forwardKey,
 };
 
 // Signal readiness
