@@ -22,8 +22,8 @@ final class KeyboardShortcutManager {
     }
 
     private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
-        // Suppress during text input or modal sheets
-        if isTextFieldFocused() || isSheetPresented() {
+        // Don't intercept when typing in native text fields or sheets
+        if isNativeTextFieldFocused() || isSheetPresented() {
             return event
         }
 
@@ -33,31 +33,48 @@ final class KeyboardShortcutManager {
 
         guard isCmd || isCmdShift else { return event }
 
+        guard let chars = event.charactersIgnoringModifiers else { return event }
+
         // ⌘+1 through ⌘+9
-        if isCmd, let digit = digitFromKeyCode(event.keyCode), digit >= 1, digit <= 9 {
+        if isCmd, let digit = Int(chars), digit >= 1, digit <= 9 {
             switchToWorkspaceAtIndex(digit - 1)
             return nil
         }
 
-        switch event.keyCode {
-        case 126 where isCmd:  // ⌘+↑ (up arrow)
-            navigatePrevWorkspace()
-            return nil
-        case 125 where isCmd:  // ⌘+↓ (down arrow)
-            navigateNextWorkspace()
-            return nil
-        case 13 where isCmdShift:  // ⌘+Shift+W
+        // Arrow keys (use keyCode since they have no useful character)
+        if isCmd {
+            switch event.keyCode {
+            case 126:  // ↑
+                navigatePrevWorkspace()
+                return nil
+            case 125:  // ↓
+                navigateNextWorkspace()
+                return nil
+            default:
+                break
+            }
+        }
+
+        // Character-based shortcuts
+        if isCmd {
+            switch chars {
+            case "\\":
+                toggleSidebar()
+                return nil
+            case "n":
+                newWorkspace()
+                return nil
+            default:
+                break
+            }
+        }
+
+        if isCmdShift, chars.lowercased() == "w" {
             deleteActiveWorkspace()
             return nil
-        case 42 where isCmd:  // ⌘+\ (backslash)
-            toggleSidebar()
-            return nil
-        case 45 where isCmd:  // ⌘+N
-            newWorkspace()
-            return nil
-        default:
-            return event
         }
+
+        return event
     }
 
     // MARK: - Actions
@@ -117,27 +134,15 @@ final class KeyboardShortcutManager {
 
     // MARK: - Helpers
 
-    private func isTextFieldFocused() -> Bool {
+    private func isNativeTextFieldFocused() -> Bool {
         guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+        // Only suppress shortcuts for native AppKit text inputs, NOT WKWebView internals
+        let className = String(describing: type(of: responder))
+        if className.hasPrefix("WK") { return false }
         return responder is NSTextView || responder is NSTextField
     }
 
     private func isSheetPresented() -> Bool {
         NSApp.keyWindow?.attachedSheet != nil
-    }
-
-    private func digitFromKeyCode(_ keyCode: UInt16) -> Int? {
-        switch keyCode {
-        case 18: return 1
-        case 19: return 2
-        case 20: return 3
-        case 21: return 4
-        case 23: return 5
-        case 22: return 6
-        case 26: return 7
-        case 28: return 8
-        case 25: return 9
-        default: return nil
-        }
     }
 }

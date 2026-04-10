@@ -141,6 +141,7 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
         let escaped = sessionId.jsEscaped
         webView.evaluateJavaScript("window.__superset?.initTerminal('\(escaped)')")
         webView.evaluateJavaScript("window.__superset?.showTerminal('\(escaped)')")
+        window.makeFirstResponder(webView)
     }
 
     /// Deliver batched PTY output to JS via evaluateJavaScript (WKURLSchemeHandler streaming not supported)
@@ -159,6 +160,7 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
     func switchTerminal(sessionId: String) {
         let escaped = sessionId.jsEscaped
         webView.evaluateJavaScript("window.__superset?.showTerminal('\(escaped)')")
+        window.makeFirstResponder(webView)
     }
 
     func destroyTerminal(sessionId: String) {
@@ -200,6 +202,7 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
             if sessionManager.session(for: activeId) != nil {
                 // Already reconnected above, just show
                 switchTerminal(sessionId: activeId)
+                window.makeFirstResponder(webView)
             } else {
                 // Fresh launch — create PTY for active workspace
                 if let ws = try? db.workspace(id: activeId) {

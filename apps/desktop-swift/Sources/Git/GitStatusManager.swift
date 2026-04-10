@@ -16,6 +16,18 @@ final class GitStatusManager: @unchecked Sendable {
     private let queue = DispatchQueue(label: "sh.superset.gitstatus", qos: .utility)
     private let logger = Logger(subsystem: "sh.superset.shell", category: "GitStatus")
 
+    private static func findGitPath() -> String {
+        let candidates = ["/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"]
+        for path in candidates {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+        return "/usr/bin/git" // fallback
+    }
+
+    private static let gitPath = findGitPath()
+
     /// In-memory cache for branch workspace status (no worktree row in DB)
     var branchStatusCache: [String: GitStatusInfo] = [:]
 
@@ -72,26 +84,41 @@ final class GitStatusManager: @unchecked Sendable {
         let defaultBranch = activeDefaultBranch ?? "main"
         lock.unlock()
 
-        let branch = (try? runGit(["symbolic-ref", "--short", "HEAD"], cwd: repoPath))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var branch = ""
+        do {
+            branch = try runGit(["symbolic-ref", "--short", "HEAD"], cwd: repoPath).trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            logger.warning("Failed to get branch: \(error.localizedDescription)")
+        }
 
         // git fetch (best effort, with timeout)
-        let _ = try? runGitWithTimeout(["fetch", "origin", defaultBranch, "--quiet"], cwd: repoPath, timeout: fetchTimeout)
+        do {
+            _ = try runGitWithTimeout(["fetch", "origin", defaultBranch, "--quiet"], cwd: repoPath, timeout: fetchTimeout)
+        } catch {
+            logger.warning("git fetch failed (continuing with local status): \(error.localizedDescription)")
+        }
 
         // Ahead/behind
         var ahead = 0
         var behind = 0
-        if let revList = try? runGit(["rev-list", "--left-right", "--count", "origin/\(defaultBranch)...HEAD"], cwd: repoPath) {
+        do {
+            let revList = try runGit(["rev-list", "--left-right", "--count", "origin/\(defaultBranch)...HEAD"], cwd: repoPath)
             let parts = revList.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "\t")
             if parts.count == 2 {
                 behind = Int(parts[0]) ?? 0
                 ahead = Int(parts[1]) ?? 0
             }
+        } catch {
+            logger.warning("Failed to get ahead/behind: \(error.localizedDescription)")
         }
 
         // Changed files
         var changedFiles = 0
-        if let status = try? runGit(["status", "--porcelain"], cwd: repoPath) {
+        do {
+            let status = try runGit(["status", "--porcelain"], cwd: repoPath)
             changedFiles = status.split(separator: "\n").count
+        } catch {
+            logger.warning("Failed to get changed files: \(error.localizedDescription)")
         }
 
         let info = GitStatusInfo(
@@ -125,7 +152,7 @@ final class GitStatusManager: @unchecked Sendable {
 
     private func runGit(_ args: [String], cwd: String) throws -> String {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.executableURL = URL(fileURLWithPath: Self.gitPath)
         process.arguments = args
         process.currentDirectoryURL = URL(fileURLWithPath: cwd)
         process.environment = ProcessInfo.processInfo.environment.merging(["GIT_TERMINAL_PROMPT": "0"]) { _, new in new }
@@ -156,7 +183,7 @@ final class GitStatusManager: @unchecked Sendable {
 
     private func runGitWithTimeout(_ args: [String], cwd: String, timeout: TimeInterval) throws -> String {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.executableURL = URL(fileURLWithPath: Self.gitPath)
         process.arguments = args
         process.currentDirectoryURL = URL(fileURLWithPath: cwd)
         process.environment = ProcessInfo.processInfo.environment.merging(["GIT_TERMINAL_PROMPT": "0"]) { _, new in new }
