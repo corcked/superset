@@ -1,6 +1,7 @@
 import AppKit
 import os
 
+@MainActor
 final class KeyboardShortcutManager {
     private var monitor: Any?
     weak var sidebarViewModel: SidebarViewModel?

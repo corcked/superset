@@ -28,6 +28,7 @@
 		A1B2C3D4E5F6A7B8C9D0E1FA /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1FB /* SidebarView.swift */; };
 		B1C2D3E4F5A6B7C8D9E0F1A0 /* ProjectRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6B7C8D9E0F1A1 /* ProjectRowView.swift */; };
 		B1C2D3E4F5A6B7C8D9E0F1A2 /* WorkspaceRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6B7C8D9E0F1A3 /* WorkspaceRowView.swift */; };
+		D1E2F3A4B5C6D7E8F9A0B1C2 /* KeyboardShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6D7E8F9A0B1C3 /* KeyboardShortcutManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +63,7 @@
 		A1B2C3D4E5F6A7B8C9D0E1FB /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A6B7C8D9E0F1A1 /* ProjectRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectRowView.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A6B7C8D9E0F1A3 /* WorkspaceRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceRowView.swift; sourceTree = "<group>"; };
+		D1E2F3A4B5C6D7E8F9A0B1C3 /* KeyboardShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -139,6 +141,7 @@
 		6440F03073F7A16B558815ED /* App */ = {
 			isa = PBXGroup;
 			children = (
+				D1E2F3A4B5C6D7E8F9A0B1C3 /* KeyboardShortcutManager.swift */,
 				2FA0499D3388FB2E81BF24E6 /* MainWindowController.swift */,
 				A23ED462F661EDEF126FC079 /* SupersetApp.swift */,
 			);
@@ -324,6 +327,7 @@
 				B1C2D3E4F5A6B7C8D9E0F1A2 /* WorkspaceRowView.swift in Sources */,
 				87E7AC78F8CCDC392F08853F /* SupersetApp.swift in Sources */,
 				715451FDF04952659931D4C1 /* SupersetSchemeHandler.swift in Sources */,
+				D1E2F3A4B5C6D7E8F9A0B1C2 /* KeyboardShortcutManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

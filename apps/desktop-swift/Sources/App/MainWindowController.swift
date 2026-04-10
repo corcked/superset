@@ -12,6 +12,8 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
     private let sessionManager = PTYSessionManager.shared
     private let db: DatabaseManager
     let sidebarViewModel: SidebarViewModel
+    private let keyboardManager = KeyboardShortcutManager()
+    private var sidebarSplitItem: NSSplitViewItem?
     private let logger = Logger(subsystem: "sh.superset.shell", category: "Window")
 
     init(db: DatabaseManager) {
@@ -34,6 +36,10 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
         setupSplitView()
         wireViewModel()
         sidebarViewModel.startObserving()
+
+        keyboardManager.sidebarViewModel = sidebarViewModel
+        keyboardManager.sidebarSplitItem = sidebarSplitItem
+        keyboardManager.install()
     }
 
     private func setupSplitView() {
@@ -58,6 +64,7 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
         let sidebarView = SidebarView(viewModel: sidebarViewModel)
         let sidebarHosting = NSHostingController(rootView: sidebarView)
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarHosting)
+        self.sidebarSplitItem = sidebarItem
         sidebarItem.minimumThickness = 180
         sidebarItem.maximumThickness = 350
         sidebarItem.canCollapse = true
