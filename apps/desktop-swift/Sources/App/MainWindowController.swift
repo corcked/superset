@@ -69,19 +69,10 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
         sidebarItem.maximumThickness = 350
         sidebarItem.canCollapse = true
 
-        // Terminal (WKWebView)
+        // Terminal (WKWebView) — direct, no container wrapper
         let terminalVC = NSViewController()
-        let containerView = NSView()
-        containerView.addSubview(webView)
-        webView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            webView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            webView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-        ])
-        terminalVC.view = containerView
-        let terminalItem = NSSplitViewItem(contentListWithViewController: terminalVC)
+        terminalVC.view = webView
+        let terminalItem = NSSplitViewItem(viewController: terminalVC)
 
         splitVC.addSplitViewItem(sidebarItem)
         splitVC.addSplitViewItem(terminalItem)
@@ -141,7 +132,7 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
         let escaped = sessionId.jsEscaped
         webView.evaluateJavaScript("window.__superset?.initTerminal('\(escaped)')")
         webView.evaluateJavaScript("window.__superset?.showTerminal('\(escaped)')")
-        window.makeFirstResponder(webView)
+        focusWebView()
     }
 
     /// Deliver batched PTY output to JS via evaluateJavaScript (WKURLSchemeHandler streaming not supported)
@@ -160,12 +151,40 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
     func switchTerminal(sessionId: String) {
         let escaped = sessionId.jsEscaped
         webView.evaluateJavaScript("window.__superset?.showTerminal('\(escaped)')")
-        window.makeFirstResponder(webView)
+        focusWebView()
     }
 
     func destroyTerminal(sessionId: String) {
         let escaped = sessionId.jsEscaped
         webView.evaluateJavaScript("window.__superset?.destroyTerminal('\(escaped)')")
+    }
+
+    // MARK: - Focus Management
+
+    /// Focus the WKWebView for keyboard input.
+    /// Two layers: AppKit first responder + JS focus on xterm's hidden textarea.
+    func focusWebView() {
+        let result = window.makeFirstResponder(webView)
+        let responderType = String(describing: type(of: window.firstResponder))
+        logger.info("focusWebView: makeFirstResponder=\(result) responder=\(responderType)")
+
+        webView.evaluateJavaScript("""
+            window.focus();
+            const el = document.querySelector('.xterm-helper-textarea');
+            if (el) { el.focus(); }
+            JSON.stringify({
+                activeElement: document.activeElement?.tagName + '.' + document.activeElement?.className,
+                helperExists: !!el,
+                helperFocused: document.activeElement === el
+            });
+        """) { result, error in
+            if let result {
+                NSLog("[SupersetShell] focusWebView JS: %@", String(describing: result))
+            }
+            if let error {
+                NSLog("[SupersetShell] focusWebView JS error: %@", error.localizedDescription)
+            }
+        }
     }
 
     // MARK: - WKNavigationDelegate
@@ -202,7 +221,6 @@ final class MainWindowController: NSObject, WKNavigationDelegate {
             if sessionManager.session(for: activeId) != nil {
                 // Already reconnected above, just show
                 switchTerminal(sessionId: activeId)
-                window.makeFirstResponder(webView)
             } else {
                 // Fresh launch — create PTY for active workspace
                 if let ws = try? db.workspace(id: activeId) {
