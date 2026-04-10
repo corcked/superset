@@ -11,9 +11,13 @@ final class SidebarViewModel {
 
     private let db: DatabaseManager
     private let sessionManager = PTYSessionManager.shared
+    private let gitStatusManager = GitStatusManager.shared
     private var projectsObservation: AnyDatabaseCancellable?
     private var activeObservation: AnyDatabaseCancellable?
     private let logger = Logger(subsystem: "sh.superset.shell", category: "Sidebar")
+
+    var branchStatusGeneration: Int = 0
+    var showNewWorkspaceSheet = false
 
     // Callbacks for terminal operations — set by MainWindowController
     var onCreateAndShowTerminal: ((String, String) -> Void)?   // (sessionId, cwd)
@@ -43,6 +47,16 @@ final class SidebarViewModel {
             activeWorkspaceId = try db.activeWorkspaceId()
         } catch {
             logger.error("Failed initial load: \(error.localizedDescription)")
+        }
+
+        // Wire branch status refresh
+        gitStatusManager.onBranchStatusUpdated = { [weak self] in
+            self?.branchStatusGeneration += 1
+        }
+
+        // Start polling for active workspace
+        if let activeId = activeWorkspaceId {
+            startGitPollingForWorkspace(id: activeId)
         }
     }
 
@@ -184,6 +198,7 @@ final class SidebarViewModel {
         }
 
         activeWorkspaceId = id
+        startGitPollingForWorkspace(id: id)
 
         // If PTY already exists, just show it
         if sessionManager.session(for: id) != nil {
@@ -201,6 +216,39 @@ final class SidebarViewModel {
         }
 
         onCreateAndShowTerminal?(id, cwd)
+    }
+
+    // MARK: - Git Status
+
+    func startGitPollingForWorkspace(id: String) {
+        guard let ws = try? db.workspace(id: id) else { return }
+        let project = projects.first(where: { $0.project.id == ws.projectId })?.project
+        guard let project else { return }
+
+        let repoPath: String
+        if ws.isWorktreeType, let wtId = ws.worktreeId, let wt = try? db.worktree(id: wtId) {
+            repoPath = wt.path
+        } else {
+            repoPath = project.mainRepoPath
+        }
+
+        gitStatusManager.startPolling(
+            workspaceId: id,
+            repoPath: repoPath,
+            worktreeId: ws.worktreeId,
+            defaultBranch: project.defaultBranch
+        )
+    }
+
+    /// Resolve git status for a workspace (from DB worktrees or in-memory cache)
+    func gitStatus(for workspace: Workspace) -> GitStatusInfo? {
+        if workspace.isWorktreeType, let wtId = workspace.worktreeId {
+            let wt = projects.flatMap(\.worktrees).first(where: { $0.id == wtId })
+            return wt?.parsedGitStatus
+        } else {
+            _ = branchStatusGeneration // trigger SwiftUI refresh
+            return gitStatusManager.branchStatusCache[workspace.id]
+        }
     }
 
     // MARK: - Delete Workspace

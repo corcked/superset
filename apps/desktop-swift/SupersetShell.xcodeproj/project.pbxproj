@@ -23,6 +23,7 @@
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* DatabaseManager.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F5 /* Models.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F6 /* GitWorktreeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F7 /* GitWorktreeManager.swift */; };
+		C2D3E4F5A6B7C8D9E0F1A2B3 /* GitStatusManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D3E4F5A6B7C8D9E0F1A2B4 /* GitStatusManager.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F8 /* SidebarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F9 /* SidebarViewModel.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1FA /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1FB /* SidebarView.swift */; };
 		B1C2D3E4F5A6B7C8D9E0F1A0 /* ProjectRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6B7C8D9E0F1A1 /* ProjectRowView.swift */; };
@@ -56,6 +57,7 @@
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F5 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F7 /* GitWorktreeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitWorktreeManager.swift; sourceTree = "<group>"; };
+		C2D3E4F5A6B7C8D9E0F1A2B4 /* GitStatusManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatusManager.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F9 /* SidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewModel.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1FB /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A6B7C8D9E0F1A1 /* ProjectRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectRowView.swift; sourceTree = "<group>"; };
@@ -118,6 +120,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F6A7B8C9D0E1F7 /* GitWorktreeManager.swift */,
+				C2D3E4F5A6B7C8D9E0F1A2B4 /* GitStatusManager.swift */,
 			);
 			path = Git;
 			sourceTree = "<group>";
@@ -308,6 +311,7 @@
 				39DEF411D94B5D65CAA26FA6 /* ControlMessageHandler.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* DatabaseManager.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F6 /* GitWorktreeManager.swift in Sources */,
+				C2D3E4F5A6B7C8D9E0F1A2B3 /* GitStatusManager.swift in Sources */,
 				8A1E052FD66AF8853DF61A72 /* MainWindowController.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F4 /* Models.swift in Sources */,
 				8A9B8BA611159A0EDBDAD387 /* OutputBatcher.swift in Sources */,
