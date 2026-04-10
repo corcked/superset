@@ -7,11 +7,12 @@ import * as bridge from "./superset-bridge";
 interface TerminalEntry {
   term: Terminal;
   fit: FitAddon;
-  container: HTMLElement;
+  container: HTMLDivElement;
   resizeObserver: ResizeObserver;
 }
 
 const terminals = new Map<string, TerminalEntry>();
+let activeSessionId: string | null = null;
 
 const FONT_FAMILY = [
   "JetBrains Mono",
@@ -24,14 +25,47 @@ const FONT_FAMILY = [
   "monospace",
 ].join(", ");
 
-function initTerminal(sessionId: string, container: HTMLElement): void {
-  // Destroy existing if re-initializing (e.g., after WebView crash recovery)
+const THEME = {
+  background: "#151110",
+  foreground: "#d4d4d4",
+  cursor: "#d4d4d4",
+  cursorAccent: "#151110",
+  selectionBackground: "#264f78",
+  black: "#000000",
+  red: "#cd3131",
+  green: "#0dbc79",
+  yellow: "#e5e510",
+  blue: "#2472c8",
+  magenta: "#bc3fbc",
+  cyan: "#11a8cd",
+  white: "#e5e5e5",
+  brightBlack: "#666666",
+  brightRed: "#f14c4c",
+  brightGreen: "#23d18b",
+  brightYellow: "#f5f543",
+  brightBlue: "#3b8eea",
+  brightMagenta: "#d670d6",
+  brightCyan: "#29b8db",
+  brightWhite: "#e5e5e5",
+};
+
+const rootContainer = document.getElementById("terminal-container")!;
+
+function initTerminal(sessionId: string): void {
+  // Destroy existing if re-initializing (WebView crash recovery)
   const existing = terminals.get(sessionId);
   if (existing) {
     existing.resizeObserver.disconnect();
     existing.term.dispose();
+    existing.container.remove();
     terminals.delete(sessionId);
   }
+
+  // Create container div
+  const container = document.createElement("div");
+  container.id = `term-${sessionId}`;
+  container.style.cssText = "position:absolute;inset:0;visibility:hidden;";
+  rootContainer.appendChild(container);
 
   const fitAddon = new FitAddon();
   const term = new Terminal({
@@ -45,29 +79,7 @@ function initTerminal(sessionId: string, container: HTMLElement): void {
     macOptionIsMeta: false,
     cursorStyle: "block",
     cursorInactiveStyle: "outline",
-    theme: {
-      background: "#151110",
-      foreground: "#d4d4d4",
-      cursor: "#d4d4d4",
-      cursorAccent: "#151110",
-      selectionBackground: "#264f78",
-      black: "#000000",
-      red: "#cd3131",
-      green: "#0dbc79",
-      yellow: "#e5e510",
-      blue: "#2472c8",
-      magenta: "#bc3fbc",
-      cyan: "#11a8cd",
-      white: "#e5e5e5",
-      brightBlack: "#666666",
-      brightRed: "#f14c4c",
-      brightGreen: "#23d18b",
-      brightYellow: "#f5f543",
-      brightBlue: "#3b8eea",
-      brightMagenta: "#d670d6",
-      brightCyan: "#29b8db",
-      brightWhite: "#e5e5e5",
-    },
+    theme: THEME,
   });
 
   term.loadAddon(fitAddon);
@@ -78,7 +90,7 @@ function initTerminal(sessionId: string, container: HTMLElement): void {
 
   term.open(container);
 
-  // WebGL addon — optional optimization, canvas fallback is automatic
+  // WebGL addon — optional
   requestAnimationFrame(() => {
     try {
       const webgl = new WebglAddon();
@@ -88,21 +100,21 @@ function initTerminal(sessionId: string, container: HTMLElement): void {
       });
       term.loadAddon(webgl);
     } catch {
-      // WebGL not available, canvas renderer used automatically
+      // Canvas fallback
     }
   });
-
-  fitAddon.fit();
 
   // Wire keyboard input → Swift PTY
   term.onData((data) => {
     bridge.sendInput(sessionId, data);
   });
 
-  // Wire resize → Swift PTY
+  // Wire resize — only send if this terminal is visible
   const resizeObserver = new ResizeObserver(() => {
-    fitAddon.fit();
-    bridge.requestResize(sessionId, term.cols, term.rows);
+    if (activeSessionId === sessionId) {
+      fitAddon.fit();
+      bridge.requestResize(sessionId, term.cols, term.rows);
+    }
   });
   resizeObserver.observe(container);
 
@@ -118,9 +130,23 @@ function initTerminal(sessionId: string, container: HTMLElement): void {
       term.writeln(`\r\n\x1b[31m[Error: ${message}]\x1b[0m`);
     },
   });
+}
 
-  // Send initial resize after stream is connecting
-  bridge.requestResize(sessionId, term.cols, term.rows);
+function showTerminal(sessionId: string): void {
+  // Hide all
+  for (const [, entry] of terminals) {
+    entry.container.style.visibility = "hidden";
+  }
+
+  // Show target
+  const entry = terminals.get(sessionId);
+  if (entry) {
+    entry.container.style.visibility = "visible";
+    activeSessionId = sessionId;
+    entry.fit.fit();
+    bridge.requestResize(sessionId, entry.term.cols, entry.term.rows);
+    entry.term.focus();
+  }
 }
 
 function destroyTerminal(sessionId: string): void {
@@ -128,15 +154,25 @@ function destroyTerminal(sessionId: string): void {
   if (entry) {
     entry.resizeObserver.disconnect();
     entry.term.dispose();
+    entry.container.remove();
     terminals.delete(sessionId);
+    if (activeSessionId === sessionId) {
+      activeSessionId = null;
+    }
   }
 }
 
-// Expose to Swift for calling via evaluateJavaScript
+function getActiveSessionId(): string | null {
+  return activeSessionId;
+}
+
+// Expose to Swift
 (window as any).__superset = {
   initTerminal,
+  showTerminal,
   destroyTerminal,
+  getActiveSessionId,
 };
 
-// Signal readiness to Swift
+// Signal readiness
 bridge.signalReady();
