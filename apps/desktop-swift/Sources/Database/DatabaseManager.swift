@@ -53,7 +53,10 @@ final class DatabaseManager: @unchecked Sendable {
                     .filter(Column("deleting_at") == nil)
                     .order(Column("tab_order").asc)
                     .fetchAll(db)
-                return ProjectWithWorkspaces(project: project, workspaces: workspaces)
+                let worktrees = try Worktree
+                    .filter(Column("project_id") == project.id)
+                    .fetchAll(db)
+                return ProjectWithWorkspaces(project: project, workspaces: workspaces, worktrees: worktrees)
             }
         }
     }
@@ -156,6 +159,15 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
+    func updateWorktreeGitStatus(worktreeId: String, statusJson: String) throws {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE worktrees SET git_status = ? WHERE id = ?",
+                arguments: [statusJson, worktreeId]
+            )
+        }
+    }
+
     // MARK: - Reactive Observation
 
     @MainActor func observeProjectsWithWorkspaces(
@@ -172,7 +184,10 @@ final class DatabaseManager: @unchecked Sendable {
                     .filter(Column("deleting_at") == nil)
                     .order(Column("tab_order").asc)
                     .fetchAll(db)
-                return ProjectWithWorkspaces(project: project, workspaces: workspaces)
+                let worktrees = try Worktree
+                    .filter(Column("project_id") == project.id)
+                    .fetchAll(db)
+                return ProjectWithWorkspaces(project: project, workspaces: workspaces, worktrees: worktrees)
             }
         }
 

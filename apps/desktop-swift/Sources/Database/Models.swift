@@ -32,6 +32,17 @@ struct Project: Codable, FetchableRecord, PersistableRecord, Identifiable {
     }
 }
 
+// MARK: - Git Status
+
+struct GitStatusInfo: Codable {
+    var branch: String = ""
+    var ahead: Int = 0
+    var behind: Int = 0
+    var changedFiles: Int = 0
+    var needsRebase: Bool = false
+    var lastRefreshed: Int = 0
+}
+
 // MARK: - Worktree
 
 struct Worktree: Codable, FetchableRecord, PersistableRecord, Identifiable {
@@ -42,6 +53,7 @@ struct Worktree: Codable, FetchableRecord, PersistableRecord, Identifiable {
     var baseBranch: String?
     var createdAt: Int
     var createdBySuperset: Bool
+    var gitStatus: String?
 
     static let databaseTableName = "worktrees"
 
@@ -53,6 +65,14 @@ struct Worktree: Codable, FetchableRecord, PersistableRecord, Identifiable {
         case baseBranch = "base_branch"
         case createdAt = "created_at"
         case createdBySuperset = "created_by_superset"
+        case gitStatus = "git_status"
+    }
+}
+
+extension Worktree {
+    var parsedGitStatus: GitStatusInfo? {
+        guard let json = gitStatus?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(GitStatusInfo.self, from: json)
     }
 }
 
@@ -123,5 +143,6 @@ struct AppSettings: Codable, FetchableRecord, PersistableRecord {
 struct ProjectWithWorkspaces: Identifiable {
     let project: Project
     let workspaces: [Workspace]
+    let worktrees: [Worktree]
     var id: String { project.id }
 }
