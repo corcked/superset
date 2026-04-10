@@ -50,7 +50,10 @@ struct SidebarView: View {
                         onCreateWorkspace: { projectId, branch in
                             viewModel.createWorkspace(projectId: projectId, branchName: branch)
                         },
-                        onDeleteWorkspace: { id in viewModel.deleteWorkspace(id: id) }
+                        onDeleteWorkspace: { id in viewModel.deleteWorkspace(id: id) },
+                        gitStatusForWorkspace: { workspace in
+                            viewModel.gitStatus(for: workspace)
+                        }
                     )
                 }
             }

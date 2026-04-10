@@ -3,6 +3,7 @@ import SwiftUI
 struct WorkspaceRowView: View {
     let workspace: Workspace
     let isActive: Bool
+    let gitStatus: GitStatusInfo?
     let onSelect: () -> Void
     let onDelete: (() -> Void)?
 
@@ -19,6 +20,7 @@ struct WorkspaceRowView: View {
                     .foregroundStyle(isActive ? .white : .primary)
                     .lineLimit(1)
                 Spacer()
+                statusBadges
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -36,5 +38,28 @@ struct WorkspaceRowView: View {
             }
         }
         .padding(.leading, 8)
+    }
+
+    @ViewBuilder
+    private var statusBadges: some View {
+        if let status = gitStatus {
+            HStack(spacing: 4) {
+                if status.ahead > 0 {
+                    Text("↑\(status.ahead)")
+                        .font(.caption2)
+                        .foregroundStyle(isActive ? .white.opacity(0.8) : .green)
+                }
+                if status.behind > 0 {
+                    Text("↓\(status.behind)")
+                        .font(.caption2)
+                        .foregroundStyle(isActive ? .white.opacity(0.8) : .orange)
+                }
+                if status.changedFiles > 0 {
+                    Text("\(status.changedFiles)")
+                        .font(.caption2)
+                        .foregroundStyle(isActive ? .white.opacity(0.7) : .secondary)
+                }
+            }
+        }
     }
 }

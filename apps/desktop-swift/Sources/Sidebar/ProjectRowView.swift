@@ -7,6 +7,7 @@ struct ProjectRowView: View {
     let onSelectWorkspace: (String) -> Void
     let onCreateWorkspace: (String, String) -> Void
     let onDeleteWorkspace: (String) -> Void
+    let gitStatusForWorkspace: (Workspace) -> GitStatusInfo?
 
     @State private var isExpanded = true
     @State private var showNewBranchSheet = false
@@ -18,6 +19,7 @@ struct ProjectRowView: View {
                 WorkspaceRowView(
                     workspace: workspace,
                     isActive: workspace.id == activeWorkspaceId,
+                    gitStatus: gitStatusForWorkspace(workspace),
                     onSelect: { onSelectWorkspace(workspace.id) },
                     onDelete: workspace.isWorktreeType
                         ? { onDeleteWorkspace(workspace.id) }
